@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "easy-overlay"
+version = "0.1.0"
+description = "A minimal Windows crosshair overlay built with PySide6 and pywin32."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "PySide6-Essentials>=6.6",
+    "pywin32>=306; platform_system == 'Windows'",
+]
+
+[project.gui-scripts]
+easy-overlay = "easy_overlay.app:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
