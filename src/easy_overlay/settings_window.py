@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
 )
 
 from . import ui_text
+from .about_dialog import AboutDialog
 from .color_picker_dialog import ColorPickerDialog
 from .config import CrosshairConfig
 from .constants import MIN_CROSSHAIR_ARM_LENGTH, WINDOW_SIZE
@@ -89,6 +90,8 @@ class SettingsWindow(QWidget):
         reset_button = QPushButton(ui_text.BUTTON_RESET)
         reset_button.setObjectName("ResetButton")
         reset_button.clicked.connect(self.reset_defaults)
+        about_button = QPushButton(ui_text.BUTTON_ABOUT)
+        about_button.clicked.connect(self._show_about)
         close_button = QPushButton(ui_text.BUTTON_CLOSE)
         close_button.setObjectName("CloseButton")
         close_button.clicked.connect(self.hide)
@@ -113,6 +116,7 @@ class SettingsWindow(QWidget):
         button_row = QHBoxLayout()
         button_row.setContentsMargins(0, 2, 0, 0)
         button_row.setSpacing(8)
+        button_row.addWidget(about_button)
         button_row.addWidget(reset_button)
         button_row.addStretch(1)
         button_row.addWidget(close_button)
@@ -206,6 +210,10 @@ class SettingsWindow(QWidget):
         self._color = color
         self._update_color_swatch()
         self._apply_from_controls()
+
+    def _show_about(self) -> None:
+        dialog = AboutDialog(self)
+        dialog.exec()
 
     def _handle_length_changed(self, *_args: object) -> None:
         self._update_gap_range(self._length_spin.value())

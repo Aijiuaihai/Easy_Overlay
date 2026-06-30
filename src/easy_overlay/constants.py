@@ -1,5 +1,7 @@
 APP_NAME = "Easy Overlay"
 ORGANIZATION_NAME = "Aijiuaihai"
+AUTHOR_NAME = "Aijiuaihai"
+GITHUB_URL = "https://github.com/Aijiuaihai/Easy_Overlay"
 
 WINDOW_SIZE = 128
 MIN_CROSSHAIR_ARM_LENGTH = 1
