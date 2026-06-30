@@ -4,8 +4,10 @@ import sys
 
 from PySide6.QtWidgets import QApplication
 
+from .config_store import load_config, save_config
 from .constants import APP_NAME, ORGANIZATION_NAME
 from .overlay_window import CrosshairOverlay
+from .settings_window import SettingsWindow
 from .tray import TrayController
 
 
@@ -18,10 +20,17 @@ def main(argv: list[str] | None = None) -> int:
     app.setOrganizationName(ORGANIZATION_NAME)
     app.setQuitOnLastWindowClosed(False)
 
-    overlay = CrosshairOverlay()
-    overlay.show()
+    config = load_config()
+    overlay = CrosshairOverlay(config)
+    settings = SettingsWindow(config)
+    settings.config_changed.connect(overlay.set_config)
+    settings.config_changed.connect(save_config)
 
-    tray = TrayController(app, overlay)
+    if config.enabled:
+        overlay.show()
+
+    tray = TrayController(app, overlay, settings)
     app.setProperty("tray_controller", tray)
+    app.setProperty("settings_window", settings)
 
     return app.exec()

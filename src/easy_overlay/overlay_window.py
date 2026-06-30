@@ -1,22 +1,22 @@
 from __future__ import annotations
 
+import ctypes
+import ctypes.wintypes
+import sys
+
 from PySide6.QtCore import QPointF, Qt
-from PySide6.QtGui import QColor, QGuiApplication, QPainter, QPen
+from PySide6.QtGui import QGuiApplication, QPainter, QPen
 from PySide6.QtWidgets import QWidget
 
-from .constants import (
-    CROSSHAIR_ARM_LENGTH,
-    CROSSHAIR_GAP,
-    CROSSHAIR_OUTLINE_THICKNESS,
-    CROSSHAIR_THICKNESS,
-    WINDOW_SIZE,
-)
+from .config import CrosshairConfig, qcolor_from_tuple
+from .constants import WINDOW_SIZE
 from .win32_overlay import apply_overlay_window_styles
 
 
 class CrosshairOverlay(QWidget):
-    def __init__(self) -> None:
+    def __init__(self, config: CrosshairConfig | None = None) -> None:
         super().__init__(None)
+        self._config = (config or CrosshairConfig()).normalized()
         self.setObjectName("CrosshairOverlay")
         self.setFixedSize(WINDOW_SIZE, WINDOW_SIZE)
 
@@ -26,15 +26,33 @@ class CrosshairOverlay(QWidget):
             | Qt.WindowType.Tool
             | Qt.WindowType.WindowDoesNotAcceptFocus
         )
-        transparent_input = getattr(Qt.WindowType, "WindowTransparentForInput", None)
-        if transparent_input is not None:
-            flags |= transparent_input
         self.setWindowFlags(flags)
 
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground, True)
+
+    def nativeEvent(self, event_type, message):  # noqa: N802
+        if sys.platform == "win32":
+            import win32con
+
+            msg = ctypes.wintypes.MSG.from_address(int(message))
+            if msg.message == win32con.WM_NCHITTEST:
+                return True, win32con.HTTRANSPARENT
+
+        return super().nativeEvent(event_type, message)
+
+    def set_config(self, config: CrosshairConfig) -> None:
+        self._config = config.normalized()
+        if not self._config.enabled:
+            self.hide()
+            return
+
+        self.center_on_primary_screen()
+        if not self.isVisible():
+            self.show()
+        self.update()
 
     def showEvent(self, event) -> None:  # noqa: N802
         super().showEvent(event)
@@ -53,27 +71,30 @@ class CrosshairOverlay(QWidget):
 
     def paintEvent(self, event) -> None:  # noqa: N802
         super().paintEvent(event)
+        if not self._config.enabled:
+            return
 
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
 
+        config = self._config
         center = QPointF(self.width() / 2, self.height() / 2)
         segments = (
-            (QPointF(center.x() - CROSSHAIR_ARM_LENGTH, center.y()), QPointF(center.x() - CROSSHAIR_GAP, center.y())),
-            (QPointF(center.x() + CROSSHAIR_GAP, center.y()), QPointF(center.x() + CROSSHAIR_ARM_LENGTH, center.y())),
-            (QPointF(center.x(), center.y() - CROSSHAIR_ARM_LENGTH), QPointF(center.x(), center.y() - CROSSHAIR_GAP)),
-            (QPointF(center.x(), center.y() + CROSSHAIR_GAP), QPointF(center.x(), center.y() + CROSSHAIR_ARM_LENGTH)),
+            (QPointF(center.x() - config.arm_length, center.y()), QPointF(center.x() - config.gap, center.y())),
+            (QPointF(center.x() + config.gap, center.y()), QPointF(center.x() + config.arm_length, center.y())),
+            (QPointF(center.x(), center.y() - config.arm_length), QPointF(center.x(), center.y() - config.gap)),
+            (QPointF(center.x(), center.y() + config.gap), QPointF(center.x(), center.y() + config.arm_length)),
         )
 
-        outline_pen = QPen(QColor(0, 0, 0, 220), CROSSHAIR_OUTLINE_THICKNESS)
-        outline_pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-        crosshair_pen = QPen(QColor(0, 255, 0, 235), CROSSHAIR_THICKNESS)
+        if config.outline_thickness > 0:
+            outline_pen = QPen(qcolor_from_tuple(config.outline_color), config.outline_thickness)
+            outline_pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+            painter.setPen(outline_pen)
+            for start, end in segments:
+                painter.drawLine(start, end)
+
+        crosshair_pen = QPen(qcolor_from_tuple(config.color), config.thickness)
         crosshair_pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-
-        painter.setPen(outline_pen)
-        for start, end in segments:
-            painter.drawLine(start, end)
-
         painter.setPen(crosshair_pen)
         for start, end in segments:
             painter.drawLine(start, end)

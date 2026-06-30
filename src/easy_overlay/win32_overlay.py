@@ -11,14 +11,15 @@ def apply_overlay_window_styles(hwnd: int) -> None:
     import win32con
     import win32gui
 
+    if not hwnd or not win32gui.IsWindow(hwnd):
+        return
+
     ex_style = win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE)
     ex_style |= win32con.WS_EX_LAYERED
-    ex_style |= win32con.WS_EX_TRANSPARENT
     ex_style |= win32con.WS_EX_TOOLWINDOW
     ex_style |= getattr(win32con, "WS_EX_NOACTIVATE", 0x08000000)
 
     win32gui.SetWindowLong(hwnd, win32con.GWL_EXSTYLE, ex_style)
-    win32gui.SetLayeredWindowAttributes(hwnd, 0, 255, win32con.LWA_ALPHA)
     win32gui.SetWindowPos(
         hwnd,
         win32con.HWND_TOPMOST,

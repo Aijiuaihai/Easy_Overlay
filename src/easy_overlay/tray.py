@@ -4,30 +4,39 @@ from PySide6.QtCore import QObject, Qt
 from PySide6.QtGui import QAction, QColor, QIcon, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
+from . import ui_text
 from .constants import APP_NAME
 from .overlay_window import CrosshairOverlay
+from .settings_window import SettingsWindow
 
 
 class TrayController(QObject):
-    def __init__(self, app: QApplication, overlay: CrosshairOverlay) -> None:
+    def __init__(self, app: QApplication, overlay: CrosshairOverlay, settings: SettingsWindow) -> None:
         super().__init__(app)
         self._app = app
         self._overlay = overlay
+        self._settings = settings
 
         self._tray = QSystemTrayIcon(create_tray_icon(), self)
         self._tray.setToolTip(APP_NAME)
         self._tray.setContextMenu(self._create_menu())
         self._tray.activated.connect(self._handle_activation)
+        self._settings.config_changed.connect(self._handle_config_changed)
         self._tray.show()
+        self._refresh_toggle_text()
 
     def _create_menu(self) -> QMenu:
         menu = QMenu()
 
-        self._toggle_action = QAction("隐藏准星", self)
+        settings_action = QAction(ui_text.ACTION_SETTINGS, self)
+        settings_action.triggered.connect(self._settings.show_settings)
+        menu.addAction(settings_action)
+
+        self._toggle_action = QAction(self)
         self._toggle_action.triggered.connect(self.toggle_overlay)
         menu.addAction(self._toggle_action)
 
-        quit_action = QAction("退出", self)
+        quit_action = QAction(ui_text.ACTION_QUIT, self)
         quit_action.triggered.connect(self.quit)
         menu.addAction(quit_action)
 
@@ -38,17 +47,20 @@ class TrayController(QObject):
             QSystemTrayIcon.ActivationReason.Trigger,
             QSystemTrayIcon.ActivationReason.DoubleClick,
         ):
-            self.toggle_overlay()
+            self._settings.show_settings()
 
     def toggle_overlay(self) -> None:
-        if self._overlay.isVisible():
-            self._overlay.hide()
-            self._toggle_action.setText("显示准星")
-            return
+        self._settings.set_overlay_enabled(not self._overlay.isVisible())
+        self._refresh_toggle_text()
 
-        self._overlay.center_on_primary_screen()
-        self._overlay.show()
-        self._toggle_action.setText("隐藏准星")
+    def _handle_config_changed(self, _config: object) -> None:
+        self._refresh_toggle_text()
+
+    def _refresh_toggle_text(self) -> None:
+        if self._overlay.isVisible():
+            self._toggle_action.setText(ui_text.ACTION_HIDE_CROSSHAIR)
+        else:
+            self._toggle_action.setText(ui_text.ACTION_SHOW_CROSSHAIR)
 
     def quit(self) -> None:
         self._tray.hide()
