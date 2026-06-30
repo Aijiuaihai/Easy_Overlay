@@ -8,15 +8,9 @@ Easy Overlay 是一个 Windows 本地外置准星 Overlay 工具，基于 Python
 
 ### 功能
 
-- 透明、无边框、置顶的准星窗口。
-- 128x128 Overlay，默认居中显示在主屏幕。
-- 鼠标穿透，不影响点击游戏或桌面。
-- 静态绘制准星，不使用高频 Timer 或渲染循环。
+- 透明、无边框、置顶的外置游戏准星。
 - 不注入游戏、不读取游戏内存、不 Hook 游戏进程。
-- 系统托盘支持设置、显示/隐藏和退出。
-- 设置窗口支持开启/关闭准星、调整颜色、透明度、长度、中心间隙、线条粗细和描边宽度。
-- 配置会自动保存为 JSON，下次启动沿用上次设置。
-- 设置窗口内提供“关于”窗口，显示作者和 GitHub 地址。
+- 静态绘制准星，低性能损耗。
 
 ### 运行
 
@@ -52,15 +46,9 @@ A minimal Windows crosshair overlay built with Python, PySide6 and pywin32.
 
 ### Features
 
-- Transparent, frameless, always-on-top overlay window.
-- 128x128 overlay centered on the primary screen.
-- Click-through overlay, so mouse input continues to reach the desktop or game.
-- Static crosshair drawing with no high-frequency timer or render loop.
+- Transparent, frameless, always-on-top external game crosshair.
 - No game injection, no game memory reads, and no game process hooks.
-- System tray menu for settings, show/hide, and quit.
-- Settings window for enabling the overlay and adjusting color, opacity, length, gap, line thickness, and outline width.
-- JSON settings are saved automatically and reused on the next launch.
-- About window in settings with author and GitHub information.
+- Static crosshair drawing with low performance overhead.
 
 ### Run
 
