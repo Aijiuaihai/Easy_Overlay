@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Signal, Qt
+from PySide6.QtCore import QEvent, QPoint, Signal, Qt
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QCheckBox,
-    QColorDialog,
     QFormLayout,
+    QFrame,
     QHBoxLayout,
     QLabel,
     QPushButton,
@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
 )
 
 from . import ui_text
+from .color_picker_dialog import ColorPickerDialog
 from .config import CrosshairConfig
 from .constants import MIN_CROSSHAIR_ARM_LENGTH, WINDOW_SIZE
 
@@ -28,11 +29,17 @@ class SettingsWindow(QWidget):
         self._config = (config or CrosshairConfig()).normalized()
         self._color = QColor(*self._config.color)
         self._syncing = False
+        self._drag_position: QPoint | None = None
 
         self.setWindowTitle(ui_text.APP_SETTINGS_TITLE)
         self.setObjectName("SettingsWindow")
-        self.setMinimumWidth(360)
-        self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, True)
+        self.setMinimumWidth(420)
+        self.setWindowFlags(
+            Qt.WindowType.Tool
+            | Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.WindowStaysOnTopHint
+        )
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
 
         self._enabled_checkbox = QCheckBox(ui_text.LABEL_ENABLE_CROSSHAIR)
         self._enabled_checkbox.setChecked(self._config.enabled)
@@ -46,7 +53,7 @@ class SettingsWindow(QWidget):
         color_layout.setContentsMargins(0, 0, 0, 0)
         color_layout.setSpacing(8)
         self._color_swatch = QLabel()
-        self._color_swatch.setFixedSize(36, 24)
+        self._color_swatch.setFixedSize(42, 26)
         color_layout.addWidget(self._color_swatch)
         color_layout.addWidget(self._color_button, 1)
 
@@ -69,6 +76,9 @@ class SettingsWindow(QWidget):
 
         form = QFormLayout()
         form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        form.setHorizontalSpacing(14)
+        form.setVerticalSpacing(12)
         form.addRow(ui_text.LABEL_COLOR, color_row)
         form.addRow(ui_text.LABEL_LENGTH, length_row)
         form.addRow(ui_text.LABEL_GAP, gap_row)
@@ -77,24 +87,53 @@ class SettingsWindow(QWidget):
         form.addRow(ui_text.LABEL_OPACITY, opacity_row)
 
         reset_button = QPushButton(ui_text.BUTTON_RESET)
+        reset_button.setObjectName("ResetButton")
         reset_button.clicked.connect(self.reset_defaults)
         close_button = QPushButton(ui_text.BUTTON_CLOSE)
+        close_button.setObjectName("CloseButton")
         close_button.clicked.connect(self.hide)
 
+        self._title_bar = QWidget()
+        self._title_bar.setObjectName("TitleBar")
+        title_layout = QHBoxLayout(self._title_bar)
+        title_layout.setContentsMargins(0, 0, 0, 0)
+        title_layout.setSpacing(8)
+        self._title_label = QLabel(ui_text.APP_SETTINGS_TITLE)
+        self._title_label.setObjectName("SettingsTitle")
+        self._title_bar.installEventFilter(self)
+        self._title_label.installEventFilter(self)
+        header_close_button = QPushButton("X")
+        header_close_button.setObjectName("HeaderCloseButton")
+        header_close_button.setToolTip(ui_text.BUTTON_CLOSE)
+        header_close_button.clicked.connect(self.hide)
+        title_layout.addWidget(self._title_label)
+        title_layout.addStretch(1)
+        title_layout.addWidget(header_close_button)
+
         button_row = QHBoxLayout()
+        button_row.setContentsMargins(0, 2, 0, 0)
+        button_row.setSpacing(8)
         button_row.addWidget(reset_button)
         button_row.addStretch(1)
         button_row.addWidget(close_button)
 
+        panel = QFrame()
+        panel.setObjectName("SettingsPanel")
+        panel_layout = QVBoxLayout(panel)
+        panel_layout.setContentsMargins(18, 16, 18, 16)
+        panel_layout.setSpacing(14)
+        panel_layout.addWidget(self._title_bar)
+        panel_layout.addWidget(self._enabled_checkbox)
+        panel_layout.addLayout(form)
+        panel_layout.addLayout(button_row)
+
         root = QVBoxLayout(self)
-        root.setContentsMargins(14, 14, 14, 14)
-        root.setSpacing(12)
-        root.addWidget(self._enabled_checkbox)
-        root.addLayout(form)
-        root.addLayout(button_row)
+        root.setContentsMargins(10, 10, 10, 10)
+        root.addWidget(panel)
 
         self._update_gap_range(self._config.arm_length)
         self._update_color_swatch()
+        self._apply_style()
 
     def current_config(self) -> CrosshairConfig:
         return self._config
@@ -110,6 +149,31 @@ class SettingsWindow(QWidget):
         self.show()
         self.raise_()
         self.activateWindow()
+
+    def eventFilter(self, watched: object, event: QEvent) -> bool:  # noqa: N802
+        if not hasattr(self, "_title_label"):
+            return super().eventFilter(watched, event)
+
+        if watched not in (self._title_bar, self._title_label):
+            return super().eventFilter(watched, event)
+
+        if event.type() == QEvent.Type.MouseButtonPress and event.button() == Qt.MouseButton.LeftButton:
+            self._drag_position = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            return True
+
+        if (
+            event.type() == QEvent.Type.MouseMove
+            and self._drag_position is not None
+            and event.buttons() & Qt.MouseButton.LeftButton
+        ):
+            self.move(event.globalPosition().toPoint() - self._drag_position)
+            return True
+
+        if event.type() == QEvent.Type.MouseButtonRelease:
+            self._drag_position = None
+            return True
+
+        return super().eventFilter(watched, event)
 
     def _create_number_row(self, minimum: int, maximum: int, value: int) -> tuple[QSlider, QSpinBox, QWidget]:
         slider = QSlider(Qt.Orientation.Horizontal)
@@ -133,10 +197,11 @@ class SettingsWindow(QWidget):
         return slider, spin, row
 
     def _choose_color(self) -> None:
-        color = QColorDialog.getColor(self._color, self, ui_text.COLOR_DIALOG_TITLE)
-        if not color.isValid():
+        dialog = ColorPickerDialog(self._color, self)
+        if dialog.exec() != ColorPickerDialog.DialogCode.Accepted:
             return
 
+        color = dialog.selected_color()
         color.setAlpha(self._opacity_spin.value())
         self._color = color
         self._update_color_swatch()
@@ -194,6 +259,114 @@ class SettingsWindow(QWidget):
         blue = self._color.blue()
         self._color_swatch.setStyleSheet(
             "border: 1px solid #777;"
-            "border-radius: 3px;"
+            "border-radius: 8px;"
             f"background-color: rgb({red}, {green}, {blue});"
+        )
+
+    def _apply_style(self) -> None:
+        self.setStyleSheet(
+            """
+            QWidget#SettingsWindow {
+                background: transparent;
+            }
+            QFrame#SettingsPanel {
+                background-color: #f7f9fc;
+                border: 1px solid #d5dce8;
+                border-radius: 8px;
+            }
+            QWidget#TitleBar {
+                background: transparent;
+            }
+            QLabel#SettingsTitle {
+                color: #172033;
+                font-size: 16px;
+                font-weight: 600;
+            }
+            QLabel {
+                color: #344054;
+                font-size: 13px;
+            }
+            QCheckBox {
+                color: #172033;
+                font-size: 13px;
+                spacing: 8px;
+            }
+            QCheckBox::indicator {
+                width: 18px;
+                height: 18px;
+                border: 1px solid #aab4c3;
+                border-radius: 5px;
+                background-color: #ffffff;
+            }
+            QCheckBox::indicator:checked {
+                border-color: #0c8f5a;
+                background-color: #12a66a;
+            }
+            QPushButton {
+                min-height: 30px;
+                padding: 6px 12px;
+                color: #172033;
+                background-color: #ffffff;
+                border: 1px solid #cbd4e1;
+                border-radius: 8px;
+                font-size: 13px;
+            }
+            QPushButton:hover {
+                background-color: #eef5ff;
+                border-color: #91add7;
+            }
+            QPushButton:pressed {
+                background-color: #ddeaf8;
+            }
+            QPushButton#HeaderCloseButton {
+                min-width: 30px;
+                max-width: 30px;
+                min-height: 30px;
+                max-height: 30px;
+                padding: 0;
+                border-radius: 8px;
+                font-weight: 600;
+            }
+            QPushButton#CloseButton {
+                background-color: #162033;
+                border-color: #162033;
+                color: #ffffff;
+            }
+            QPushButton#CloseButton:hover {
+                background-color: #26334a;
+                border-color: #26334a;
+            }
+            QSpinBox {
+                min-height: 28px;
+                padding: 2px 7px;
+                color: #172033;
+                background-color: #ffffff;
+                border: 1px solid #cbd4e1;
+                border-radius: 8px;
+                selection-background-color: #12a66a;
+            }
+            QSpinBox:focus {
+                border-color: #12a66a;
+            }
+            QSlider::groove:horizontal {
+                height: 6px;
+                border-radius: 3px;
+                background-color: #d7dee9;
+            }
+            QSlider::sub-page:horizontal {
+                border-radius: 3px;
+                background-color: #12a66a;
+            }
+            QSlider::handle:horizontal {
+                width: 16px;
+                height: 16px;
+                margin: -5px 0;
+                border: 2px solid #ffffff;
+                border-radius: 8px;
+                background-color: #12a66a;
+            }
+            QSlider::handle:horizontal:hover {
+                background-color: #0c8f5a;
+            }
+            """
         )
